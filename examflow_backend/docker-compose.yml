@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: examflow
+      POSTGRES_PASSWORD: examflow_dev_password
+      POSTGRES_DB: examflow_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U examflow -d examflow_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://examflow:examflow_dev_password@db:5432/examflow_db
+      SECRET_KEY: dev-only-secret-key-change-in-production-min32chars
+      ENVIRONMENT: development
+      DEBUG: "true"
+      DATABASE_ECHO: "false"
+      LOG_LEVEL: INFO
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app:ro  # read-only mount for dev hot-reload (use uvicorn --reload for dev)
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload"
+
+volumes:
+  pgdata:
